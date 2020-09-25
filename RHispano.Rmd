@@ -1,0 +1,242 @@
+---
+title: "Resumen Tidyverse a vista de pájaro para EncuentRos en la fase R de R Hispano"
+output: html_document
+author: "Luis Morís Fernández y Joaquín Morís"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(width = 300)
+```
+
+Este fichero de RMarkdown contiene todo el código usado en la presentación 'Tidyevrse a vista de pájaro' que realizamos en [EncuentRos en la fase R](https://www.u-tad.com/event/save-the-date-encuentros-r/), tanto [Luis](https://es.linkedin.com/in/luis-moris-fernandez) como [yo mismo](https://twitter.com/joaquinmoris).
+
+Para cualquier cosa, puedes ponerte en contacto con nosotros a través de los correos que aparecen en la presentación
+
+### Tidyverse a vista de pájaro
+
+Esta es una breve presentación de los verbos más importantes de dplyr. Vamos a empezar cargando el conjunto de librerías de tidyverse, y vamos a utilizar el set de datos `palmerpenguins` que contiene información sobre pingüinos de varias islas.
+```{r, }
+library(tidyverse)
+library(palmerpenguins)
+```
+
+```{r}
+citation("palmerpenguins")
+```
+
+La primera función que vamos a utilizar es `glimpse`, que ofrece un resumen de un data.frame o un tibble. Es una versión mejorada de la función `str` de R base. Rápidamente podemos ver que nuestro tibble contiene 344 observaciones y 8 variables, el nombre de las variables y su tipo (factor, numérico, carácter, etc.)
+```{r}
+dplyr::glimpse(as.data.frame(penguins))
+```
+
+Vamos a utilizar por primera vez los pipes de `magrittr`. El resultado de cada función se pasa mediante el pipe y se convierte en el primer parámetro de la siguiente función. Así, `f(x, y)` sería equivalente a `x %>% f(y)`. 
+```{r}
+penguins %>%
+  is_tibble()
+```
+
+Podemos unir tantos comandos con pipes como queramos. ¿Hay alguna longitud de pico que tenga un valor NA? En este caso vamos a partir de la longitud de picos de los picos, vamos a ver si cada uno de ellos es un NA o no, y por último, la función `any` evaluará si alguno de los valores es TRUE.
+```{r}
+penguins$bill_length_mm %>% 
+  is.na() %>% 
+  any()
+```
+
+# ¿Qué pasa si tenemos que añadir más parámetros a la llamada de la función? Podemos añadirlos tanto por nombre como por posición.
+```{r}
+penguins$bill_length_mm %>% 
+  mean(na.rm = TRUE)
+```
+
+En este caso, el primer parámetro de `head` sería `penguins`, y el segundo, 10.
+```{r}
+penguins %>% head(10)
+```
+
+El primer verbo que vamos a ver es `select`, que permite seleccionar columnas. En este caso vamos a quedarnos solamente con las variables species y year.
+```{r}
+penguins %>%
+  select(species, year)
+```
+
+También podemos hacer una selección negativa, indicando que columnas queremos eliminar. En este caso queremos todas las variables excepto year y species.
+```{r}
+penguins %>%
+  select (-year, -species)
+```
+
+También podemos hacer selecciones dependiendo de condiciones lógicas, usando `where`, en este caso vamos a quedarnos solamenet con aquellas variables que sean numéricas.
+```{r}
+penguins %>%
+  select(where(is.numeric))
+```
+
+También podemos seleccionar tramos de variables, en este caso todas las variables que van desde la longitud de las aletas hasta el año de observación.
+```{r}
+penguins %>%
+  select(flipper_length_mm:year)
+```
+
+## Filter
+
+Cuando queremos quedarnos con tan solo algunos casos, podemos utilizar el verbo `filter`. En este caso vamos a quedarnos solamente con los casos en los que la isla sea Dream.
+```{r}
+penguins %>%
+  filter(island == "Dream")
+```
+
+Pero podemos poner tantas condiciones como queramos, y es fácil de leer que es lo que estamos haciendo. Aquí queremos casos de la especie Adelie, con año de observación posterior a 2007, que tengan o un pico inferior a 40mm o una aleta de longitud superior a 182mm, y cuya masa corporal sea inferior a la media del masa corporal de todo el dataset. Es más largo y complicado explicarlo en texto que leer directamente el código...
+```{r}
+penguins %>%
+  filter(species == "Adelie",
+         year > 2007,
+         bill_length_mm < 40 | flipper_length_mm > 182,
+         body_mass_g < mean(body_mass_g, na.rm = TRUE))
+```
+
+
+## Muestrear
+
+Tenemos dos funciones que nos permiten extraer muestras aleatorias, en el caso de `sample_frac` muestramos una proporción, en el ejemplo de debajo el 10% del dataset.
+```{r}
+penguins %>%
+  sample_frac(0.1)
+```
+
+Si usamos `sample_n` muestreamos un número fijo de casos, 10 en el ejemplo de debajo.
+```{r}
+penguins %>%
+  sample_n(10)
+```
+
+## Mutate
+
+El verbo `mutate` nos permite calcular nuevas variables o modificar variables que ya existen. Por ejemplo, si queremos una nueva variable en la que se almacenen los valores de los nombres de isla como cadenas de caracteres en vez de como factor, usaríamos este verbo.
+```{r}
+penguins %>%
+  mutate(island_char = as.character(island))
+```
+
+Podemos hacer más de una transformación, por ejemplo podemos pasar el nombre de las islas a caracteres y después ponerlos en mayúsuculas.
+```{r}
+penguins %>%
+  mutate(island_upper = as.character(island) %>% toupper())
+```
+
+Supongamos que los valores de longitud del pico por debajo de 37 son un error de medida y los queremos corregir. Ahora el `mutate` debe ser condicional. Lo podemos hacer usando la función de `dplyr` `if_else`, que de manera vectorizada evalua una condición, y devuelve un valor cuando la condición sea verdadera y otra cuando sea falsa. En este caso, cuando la longitud del pico sea inferior a 37 se cambia ese valor a 37, pero cuando sea igual o mayor, se mantiene el valor original.
+```{r}
+penguins %>%
+  mutate (bill_length_mm = if_else(bill_length_mm < 37,
+                                true = 37,
+                                false = bill_length_mm))
+```
+
+
+También podemos aplicar funciones que acabemos de definir. Por ejemplo, si queremos pasar de milímetros a metros, podemos utilizar `across`, que nos permite hacer una selección de variables, en este caso todas las que tengan nombres que terminan en "mm", y transformarlas, diviendo sus valores por 1000.
+```{r}
+to_meters <- function(x){
+  x/1000
+}
+
+penguins %>%
+  mutate(across(ends_with("mm"), to_meters))
+```
+
+## Rename
+
+Otras veces querremos cambiar el nombre de una o más variables. Si queremos que la variable `year` pasara a llamarse `observation_year`, lo haríamos con `rename`
+```{r}
+penguins %>%
+  rename(observation_year = year)
+```
+
+Usando `rename_with` podemos aplicar funciones para el renombrado. Cuando antes pasábamos de milímetros a metros con nuestra función `to_meters`, los nombres de las variables seguían siendo los mismos, pero esto es incorrecto, y deberían terminar con "meters" en vez de "mm". Si llamamos primero a `mutate`, luego podemos usar `rename_with` y en aquellas variables que terminan en "mm", cambiar ese fin a "meter".
+```{r}
+penguins %>%
+  mutate(across(ends_with("mm"), to_meters)) %>%
+  rename_with(~ str_replace(string = .x,
+                           pattern = "mm$",
+                           replacement = "meters"))
+```
+
+## Summarise
+
+También podemos querer calcular valores agregados a partir del dataset, como podría ser la media de una variable numérica. Para hacer esto podemos usar el verbo `summarise`, en el que indicamos como se llamará la nueva variable y como se calcula.
+```{r}
+penguins %>%
+  summarise(mean_mass = mean(body_mass_g, na.rm = TRUE))
+```
+
+Podemos calcular más de un agregado a la vez, por ejemplo una media y una desviación típica.
+```{r}
+penguins %>%
+  summarise(mean_mass = mean(body_mass_g, na.rm = TRUE),
+            sd_mass = sd(body_mass_g, na.rm = TRUE))
+```
+
+Dentro de `summarise` podemos usar también `across`, y por ejemplo calcular un estadístico para variables numéricas y otro para variables que sean factores, además de agregados para el conjunto del dataset.
+```{r}
+penguins %>%
+  summarise(
+    across(where(is.numeric), mean, na.rm = TRUE), 
+    across(where(is.factor), nlevels),
+    n = n(), 
+  )
+```
+
+## Group_by
+
+Hasta ahora hemos tratado nuestro dataset en conjunto, pero hay veces que queremos que las distintas operaciones se apliquen a distintos grupos. Por ejemplo, podemos querer calcular la media de cada una de las especies. Para ello, podemos usar el verbo `group_by`. En el ejemplo de debajo primero agrupamos el dataset por las especies, y luego calculamos la media para cada una de ellas.
+```{r}
+penguins %>%
+  group_by(species) %>%
+  summarise(mean_mass = mean(body_mass_g, na.rm = TRUE))
+```
+
+Podemos hacerlo cruzando más de una variable, por ejemplo cada especie por isla.
+```{r}
+penguins %>%
+  group_by(species, island) %>% 
+  summarise(mean_mass = mean(body_mass_g, na.rm = TRUE))
+```
+
+## Arrange
+
+Cuando queramos ordenar nuestro dataset podemos usar el verbo `arrange`, por ejemplo ordenando los pingüinos por su masa corporal de manera ascendente.
+```{r}
+penguins %>%
+  arrange(body_mass_g)
+```
+
+Podemos usar dos o más variables para ordenar de manera jerárquica, por ejemplo, primero por año, y dentro de cada año por la longitud del pico.
+```{r}
+penguins %>%
+  arrange(year, bill_length_mm)
+```
+
+Cuando queramos que el orden sea descendente tenemos la función `desc`.
+```{r}
+penguins %>%
+  arrange(desc(body_mass_g))
+```
+
+
+## Enlazando todo
+
+Lo interesante de manera flexible y sencilla cada uno de estos pasos. Si queremos un gráfico en el que se represente el número de pingüinos hembra que se registra en cada isla por año, podemos usar varios de los verbos que hemos visto y pasarle estos datos a `ggplot`
+```{r}
+penguins %>%
+  filter(sex == "female") %>%
+  group_by(island, year) %>%
+  summarise(frequency = n()) %>%
+  ggplot(aes(x = year, y = frequency, color = island, group = island)) +
+  geom_line() +
+  geom_point() +
+  labs (title = "Número de pingüinos hembra por isla y año", x = "Año", y = "Total", color = "Isla") +
+  scale_x_continuous(breaks = 2007:2009) +
+  theme_classic()
+```
+
+## Gracias por haber llegado hasta aquí
+Para cualquier duda o cosa que quieras tratar, puedes escribirnos a luis.moris.fernandez en gmail.com o a joaquin.moris en gmail.com
